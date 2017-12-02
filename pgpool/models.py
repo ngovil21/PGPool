@@ -250,7 +250,7 @@ def migrate_varchar_columns(db, *fields):
     db.execute_sql("ALTER TABLE {} {};".format(table, ', '.join(stmts)))
 
 
-def db_updater(q, db):
+def db_updater(q, db, wh_queue=None):
     # The forever loop.
     while True:
         try:
@@ -266,7 +266,7 @@ def db_updater(q, db):
             # Loop the queue.
             while True:
                 data = q.get()
-                update_account(data, db)
+                update_account(data, db, wh_queue)
                 q.task_done()
 
                 # Helping out the GC.
@@ -288,40 +288,72 @@ def new_account_event(acc, description):
     log.info("Event for account {}: {}".format(acc.username, description))
 
 
-def eval_acc_state_changes(acc_prev, acc_curr, metadata):
+def eval_acc_state_changes(acc_prev, acc_curr, metadata, webhook_queue=None):
     level_prev = acc_prev.level
     level_curr = acc_curr.level
     if level_prev is not None and level_curr is not None and level_prev < level_curr:
         new_account_event(acc_curr, "Level {} reached".format(level_curr))
+        if webhook_queue and 'levelup' in cfg_get('wh_types'):
+            webhook_queue.put('pgpool', create_webhook_data('levelup',acc_prev,acc_curr))
 
     got_true = cmp_bool(acc_prev.warn, acc_curr.warn)
-    if got_true is not None:
-        new_account_event(acc_curr, "Got warn flag :-/") if got_true else new_account_event(acc_curr,
-                                                                                            "Warn flag lifted :-)")
+    if got_true:
+        new_account_event(acc_curr, "Got warn flag :-/")
+        if webhook_queue and 'warn' in cfg_get('wh_types'):
+            webhook_queue.put('pgpool', create_webhook_data('warn', acc_prev, acc_curr))
+    elif got_true is False:
+        new_account_event(acc_curr, "Warn flag lifted :-)")
+        if webhook_queue and 'warn' in cfg_get('wh_types'):
+            webhook_queue.put('pgpool', create_webhook_data('warn', acc_prev, acc_curr))
 
     got_true = cmp_bool(acc_prev.shadowbanned, acc_curr.shadowbanned)
-    if got_true is not None:
-        new_account_event(acc_curr, "Got shadowban flag :-(") if got_true else new_account_event(acc_curr,
-                                                                                                 "Shadowban flag lifted :-)")
+    if got_true:
+        new_account_event(acc_curr, "Got shadowban flag :-(")
+        if webhook_queue and 'shadowban' in cfg_get('wh_types'):
+            webhook_queue.put('pgpool', create_webhook_data('shadowban', acc_prev, acc_curr))
+    elif got_true is False:
+        new_account_event(acc_curr, "Shadowban flag lifted :-)")
+        if webhook_queue and 'shadowban' in cfg_get('wh_types'):
+            webhook_queue.put('pgpool', create_webhook_data('shadowban', acc_prev, acc_curr))
 
     got_true = cmp_bool(acc_prev.banned, acc_curr.banned)
     if got_true is not None:
-        new_account_event(acc_curr, "Got banned :-(((") if got_true else new_account_event(acc_curr, "Ban lifted :-)))")
+        new_account_event(acc_curr, "Got banned :-(((")
+        if webhook_queue and 'banned' in cfg_get('wh_types'):
+            webhook_queue.put('pgpool', create_webhook_data('banned', acc_prev, acc_curr))
+    elif got_true is False:
+        new_account_event(acc_curr, "Ban lifted :-)))")
+        if webhook_queue and 'banned' in cfg_get('wh_types'):
+            webhook_queue.put('pgpool', create_webhook_data('banned', acc_prev, acc_curr))
 
     got_true = cmp_bool(acc_prev.ban_flag, acc_curr.ban_flag)
-    if got_true is not None:
-        new_account_event(acc_curr, "Got ban flag :-X") if got_true else new_account_event(acc_curr,
-                                                                                           "Ban flag lifted :-O")
+    if got_true:
+        new_account_event(acc_curr, "Got ban flag :-X")
+        if webhook_queue and 'banflag' in cfg_get('wh_types'):
+            webhook_queue.put('pgpool', create_webhook_data('banflag', acc_prev, acc_curr))
+    elif got_true is False:
+        new_account_event(acc_curr, "Ban flag lifted :-O")
+        if webhook_queue and 'banflag' in cfg_get('wh_types'):
+            webhook_queue.put('pgpool', create_webhook_data('banflag', acc_prev, acc_curr))
 
     got_true = cmp_bool(acc_prev.captcha, acc_curr.captcha)
-    if got_true is not None:
-        new_account_event(acc_curr, "Got CAPTCHA'd :-|") if got_true else new_account_event(acc_curr,
-                                                                                            "CAPTCHA solved :-)")
+    if got_true:
+        new_account_event(acc_curr, "Got CAPTCHA'd :-|")
+        if webhook_queue and 'captcha' in cfg_get('wh_types'):
+            webhook_queue.put('pgpool', create_webhook_data('captcha', acc_prev, acc_curr))
+    elif got_true is False:
+        new_account_event(acc_curr, "CAPTCHA solved :-)")
+        if webhook_queue and 'captcha' in cfg_get('wh_types'):
+            webhook_queue.put('pgpool', create_webhook_data('captcha', acc_prev, acc_curr))
 
     if acc_prev.system_id is not None and acc_curr.system_id is None:
         new_account_event(acc_curr, "Got released from [{}]: {}".format(acc_prev.system_id,
                                                                         metadata.get('_release_reason',
                                                                                      'unknown reason')))
+        if webhook_queue and 'release' in cfg_get('wh_types'):
+            webhook_queue.put('pgpool', create_webhook_data('release', acc_prev, acc_curr,
+                                                            metadata.get('_release_reason', 'unknown reason')))
+
 
         # if acc_prev.rareless_scans == 0 and acc_curr.rareless_scans > 0:
         #     new_account_event(acc_curr, "Started seeing only commons :-/")
@@ -329,7 +361,7 @@ def eval_acc_state_changes(acc_prev, acc_curr, metadata):
         #     new_account_event(acc_curr, "Saw rares again :-)")
 
 
-def update_account(data, db):
+def update_account(data, db, wh_queue=None):
     with db.atomic():
         try:
             acc, created = Account.get_or_create(username=data['username'])
@@ -341,7 +373,7 @@ def update_account(data, db):
                 else:
                     metadata[key] = value
             acc.last_modified = datetime.now()
-            eval_acc_state_changes(acc_previous, acc, metadata)
+            eval_acc_state_changes(acc_previous, acc, metadata, wh_queue)
             acc.save()
             log.info("Processed update for {}".format(acc.username))
         except Exception as e:
@@ -393,3 +425,51 @@ def create_tables(db):
         else:
             log.debug('Skipping table %s, it already exists.', table.__name__)
     db.close()
+
+
+def create_webhook_data(wh_type, acc_prev, acc_cur, message=""):
+    low, high, unknown, total = query_accounts("banned = 0 and shadowbanned = 0")
+    webhook_data = {
+        'type': wh_type,
+        'system_id': acc_cur.system_id if acc_cur.system_id else acc_prev.system_id,
+        'username': acc_cur.username,
+        'auth_service': acc_cur.auth_service,
+        'latitude': acc_cur.latitude,
+        'longitude': acc_cur.longitude,
+        'level': acc_cur.level,
+        'xp': acc_cur.xp,
+        'encounters': acc_cur.encounters,
+        'last_modified': acc_cur.last_modified,
+        'warn': acc_cur.warn,
+        'shadowbanned': acc_cur.shadowbanned,
+        'banned': acc_cur.banned,
+        'ban_flag': acc_cur.ban_flag,
+        'captcha': acc_cur.captcha,
+        'rareless_scans': acc_cur.rareless_scans,
+        'message': message,
+        'good_low_level': low,
+        'good_high_level': high,
+        'good_total': total
+    }
+    return webhook_data
+
+
+#Queries DB for accounts with condition, returns tuple with low (level<30), high(level>=30), unknown, total accounts
+def query_accounts(condition):
+    cursor = flaskDb.database.execute_sql('''
+            select (case when level < 30 then "low" when level >= 30 then "high" else "unknown" end) as category, count(*) from account
+            where {}
+            group by category
+        '''.format(condition))
+    low = 0
+    high = 0
+    unknown = 0
+    for row in cursor.fetchall():
+        if row[0] == 'low':
+            low = row[1]
+        elif row[0] == 'high':
+            high = row[1]
+        elif row[0] == 'unknown':
+            unknown = row[1]
+
+    return low, high, unknown, low + high + unknown

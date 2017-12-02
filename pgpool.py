@@ -12,6 +12,7 @@ from pgpool.models import init_database, db_updater, Account, auto_release
 
 # ---------------------------------------------------------------------------
 from pgpool.utils import parse_bool
+from pgpool.webhook import wh_updater
 
 logging.basicConfig(level=logging.INFO,
     format='%(asctime)s [%(threadName)16s][%(module)14s][%(levelname)8s] %(message)s')
@@ -89,13 +90,30 @@ def run_server():
 
 log.info("PGPool starting up...")
 
+# WH updates queue
+wh_updates_queue = None
+if len(cfg_get('wh_types')) == 0:
+    log.info('Webhook disabled.')
+else:
+    log.info('Webhook enabled for events: sending %s to %s.',
+             cfg_get('wh_types'),
+             cfg_get('webhooks'))
+    wh_updates_queue = Queue()
+    # Thread to process webhook updates.
+    for i in range(cfg_get('wh_threads')):
+        log.debug('Starting wh-updater worker thread %d', i)
+        t = Thread(target=wh_updater, name='wh-updater-{}'.format(i),
+                   args=(wh_updates_queue))
+        t.daemon = True
+        t.start()
+
 db = init_database(app)
 
 # DB Updates
 db_updates_queue = Queue()
 
 t = Thread(target=db_updater, name='db-updater',
-           args=(db_updates_queue, db))
+           args=(db_updates_queue, db, wh_updates_queue))
 t.daemon = True
 t.start()
 
