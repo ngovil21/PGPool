@@ -15,6 +15,8 @@ from peewee import fn
 from pgpool.models import Account, flaskDb
 from pgpool.utils import rss_mem_size
 
+log = logging.getLogger(__name__)
+
 default_log_level = 0
 
 def input_processor(state):
@@ -28,6 +30,7 @@ def input_processor(state):
         if command == '':
             # Toggle between scouts and log view
             state['display'] = 'stats' if state['display'] == 'logs' else 'logs'
+            log.info("Showing {}".format(state['display']))
 
         # Disable logging if in fullscreen more
         if state['display'] == 'logs':
@@ -36,7 +39,7 @@ def input_processor(state):
             mainlog.setLevel(logging.CRITICAL)
 
 
-def print_status(initial_display):
+def print_status(initial_display, db_updates_queue):
     global status
     global default_log_level
 
@@ -63,29 +66,29 @@ def print_status(initial_display):
         lines = []
 
         if state['display'] == 'stats':
-            print_stats(lines)
+            print_stats(lines, db_updates_queue)
 
         # Print lines
         os.system('cls' if os.name == 'nt' else 'clear')
         print ('\n'.join(lines)).encode('utf-8')
 
 
-def print_stats(lines):
-    lines.append("Mem Usage: {}".format(rss_mem_size()))
+def print_stats(lines, db_updates_queue):
+    lines.append("Mem Usage: {} | DB Queue Size: {}\n".format(rss_mem_size(), db_updates_queue.qsize()))
 
     try:
-        total = Account.select(fn.COUNT(Account.username)).scalar()
-        lines.append("Total Accounts: {}\n".format(total))
-
         lines.append("Condition     | L1-29   | L30+    | unknown | TOTAL")
 
         print_stats_line(lines, "ALL", "1")
         print_stats_line(lines, "Unknown / New", "level is null")
         print_stats_line(lines, "In Use", "system_id is not null")
+        print_stats_line(lines, "Unassigned", "system_id is null")
         print_stats_line(lines, "Good", "banned = 0 and shadowbanned = 0")
-        print_stats_line(lines, "Only Blind", "banned = 0 and shadowbanned = 1")
+        print_stats_line(lines, "Blind", "banned = 0 and shadowbanned = 1")
         print_stats_line(lines, "Banned", "banned = 1")
         print_stats_line(lines, "Captcha", "captcha = 1")
+        lines.append("\n")
+        print_system_ids_overview(lines)
     except Exception as e:
         lines.append("Exception: {}".format(e))
 
@@ -107,6 +110,26 @@ def print_stats_line(lines, name, condition):
         elif row[0] == 'unknown':
             unknown = row[1]
     lines.append("{:<13} | {:>7} | {:>7} | {:>7} | {:>7}".format(name, low, high, unknown, low + high + unknown))
+
+
+def print_system_ids_overview(lines):
+    cursor = flaskDb.database.execute_sql('select system_id, count(*) from account group by system_id')
+    stats = {}
+    for row in cursor.fetchall():
+        if row[0]:
+            stats[row[0]] = row[1]
+
+    len_sysid = 9
+    if stats:
+        max_len_sysid = reduce(lambda l1, l2: max(l1, l2),
+                               map(lambda s: len(s), stats.iterkeys()))
+        len_sysid = str(max(len_sysid, max_len_sysid))
+    tmpl = "{:<" + len_sysid + "} | {:>10}"
+
+    lines.append(tmpl.format("System ID", "# Accounts"))
+
+    for sysid in sorted(stats.iterkeys()):
+        lines.append(tmpl.format(sysid, stats[sysid]))
 
 
 def print_lines(lines, print_entity, entities, addl_lines, state):

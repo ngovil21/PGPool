@@ -8,10 +8,10 @@ from werkzeug.exceptions import abort
 
 from pgpool.config import cfg_get
 from pgpool.console import print_status
-from pgpool.models import init_database, db_updater, Account, auto_release
+from pgpool.models import init_database, db_updater, Account, auto_release, flaskDb
 
 # ---------------------------------------------------------------------------
-from pgpool.utils import parse_bool
+from pgpool.utils import parse_bool, rss_mem_size
 from pgpool.webhook import wh_updater
 
 logging.basicConfig(level=logging.INFO,
@@ -32,6 +32,51 @@ app = Flask(__name__)
 def index():
     return "PGPool running!"
 
+@app.route('/status', methods=['GET'])
+def status():
+
+    headers = ["Condition", "L1-29", "L30+", "unknown", "TOTAL"]
+    conditions = [
+        ("ALL", "1"),
+        ("Unknown / New", "level is null"),
+        ("In Use", "system_id is not null"),
+        ("Good", "banned = 0 and shadowbanned = 0"),
+        ("Only Blind", "banned = 0 and shadowbanned = 1"),
+        ("Banned", "banned = 1"),
+        ("Captcha", "captcha = 1")
+    ]
+
+    lines = "<style> th,td { padding-left: 10px; padding-right: 10px; border: 1px solid #ddd; } table { border-collapse: collapse } td { text-align:center }</style>"
+    lines += "Mem Usage: {} | DB Queue Size: {} <br><br>".format(rss_mem_size(), db_updates_queue.qsize())
+
+    lines += "<table><tr>"
+    for h in headers:
+        lines += "<th>{}</th>".format(h)
+
+    for c in conditions:
+        cursor = flaskDb.database.execute_sql('''
+            select (case when level < 30 then "low" when level >= 30 then "high" else "unknown" end) as category, count(*) from account
+            where {}
+            group by category
+        '''.format(c[1]))
+
+        low = 0
+        high = 0
+        unknown = 0
+        for row in cursor.fetchall():
+            if row[0] == 'low':
+                low = row[1]
+            elif row[0] == 'high':
+                high = row[1]
+            elif row[0] == 'unknown':
+                unknown = row[1]
+
+        lines += "<tr>"
+        lines += "<td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td>".format(c[0], low, high, unknown, low + high + unknown)
+        lines += "</tr>"
+
+    lines += "</table>"
+    return lines
 
 @app.route('/account/request', methods=['GET'])
 def get_accounts():
@@ -74,6 +119,11 @@ def release_accounts():
 
 @app.route('/account/update', methods=['POST'])
 def accounts_update():
+    if db_updates_queue.qsize() >= cfg_get('max_queue_size'):
+        msg = "DB update queue full ({} items). Ignoring update.".format(db_updates_queue.qsize())
+        log.warning(msg)
+        return msg, 503
+
     data = json.loads(request.data)
     if isinstance(data, list):
         for update in data:
@@ -128,7 +178,7 @@ else:
 
 # Start thread to print current status and get user input.
 t = Thread(target=print_status,
-           name='status_printer', args=('logs',))
+           name='status_printer', args=('logs', db_updates_queue))
 t.daemon = True
 t.start()
 
