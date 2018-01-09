@@ -427,7 +427,7 @@ def create_tables(db):
 def create_webhook_data(wh_type, acc_prev, acc_cur, message=""):
     low, high, unknown, total = query_accounts("banned = 0 and shadowbanned = 0")
     webhook_data = {
-        'type': wh_type,
+        'subtype': wh_type,
         'system_id': acc_cur.system_id if acc_cur.system_id else acc_prev.system_id,
         'username': acc_cur.username,
         'auth_service': acc_cur.auth_service,
