@@ -60,21 +60,6 @@ def wh_updater(queue):
         wh_backoff_factor,
         wh_concurrency)
 
-    # Extract the proper identifier. This list also controls which message
-    # types are getting cached.
-    # ident_fields = {
-    #     'pokestop': 'pokestop_id',
-    #     'pokemon': 'encounter_id',
-    #     'gym': 'gym_id',
-    #     'gym_details': 'id',
-    #     'raid': 'gym_id'
-    # }
-
-    # Instantiate WH LFU caches for all cached types. We separate the caches
-    # by ident_field types, because different ident_field (message) types can
-    # use the same name for their ident field.
-    # for key in ident_fields:
-    #     key_caches[key] = LFUCache(maxsize=args.wh_lfu_size)
 
     # Prepare to send data per timed message frames instead of per object.
     frame_interval_sec = (wh_frame_interval / 1000)
