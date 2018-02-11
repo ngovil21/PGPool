@@ -291,66 +291,66 @@ def eval_acc_state_changes(acc_prev, acc_curr, metadata, webhook_queue=None):
     if level_prev is not None and level_curr is not None and level_prev < level_curr:
         new_account_event(acc_curr, "Level {} reached".format(level_curr))
         if webhook_queue:
-            webhook_queue.put('levelup', create_webhook_data('levelup', acc_prev, acc_curr,
-                                                             "Level {} reached".format(level_curr)))
+            webhook_queue.put(('levelup', create_webhook_data('levelup', acc_prev, acc_curr,
+                                                             "Level {} reached".format(level_curr))))
 
     got_true = cmp_bool(acc_prev.warn, acc_curr.warn)
     if got_true:
         new_account_event(acc_curr, "Got warn flag :-/")
         if webhook_queue:
-            webhook_queue.put('warn', create_webhook_data('warn', acc_prev, acc_curr, "Got warn flag :-/"))
+            webhook_queue.put(('warn', create_webhook_data('warn', acc_prev, acc_curr, "Got warn flag :-/")))
     elif got_true is False:
         new_account_event(acc_curr, "Warn flag lifted :-)")
         if webhook_queue:
-            webhook_queue.put('warn', create_webhook_data('warn', acc_prev, acc_curr, "Warn flag lifted :-)"))
+            webhook_queue.put(('warn', create_webhook_data('warn', acc_prev, acc_curr, "Warn flag lifted :-)")))
 
     got_true = cmp_bool(acc_prev.shadowbanned, acc_curr.shadowbanned)
     if got_true:
         new_account_event(acc_curr, "Got shadowban flag :-(")
         if webhook_queue:
-            webhook_queue.put('shadowban', create_webhook_data('shadowban', acc_prev, acc_curr, "Got shadowban flag :-("))
+            webhook_queue.put(('shadowban', create_webhook_data('shadowban', acc_prev, acc_curr, "Got shadowban flag :-(")))
     elif got_true is False:
         new_account_event(acc_curr, "Shadowban flag lifted :-)")
         if webhook_queue:
-            webhook_queue.put('shadowban', create_webhook_data('shadowban', acc_prev, acc_curr, "Shadowban flag lifted :-)"))
+            webhook_queue.put(('shadowban', create_webhook_data('shadowban', acc_prev, acc_curr, "Shadowban flag lifted :-)")))
 
     got_true = cmp_bool(acc_prev.banned, acc_curr.banned)
     if got_true is not None:
         new_account_event(acc_curr, "Got banned :-(((")
         if webhook_queue:
-            webhook_queue.put('banned', create_webhook_data('banned', acc_prev, acc_curr, "Got banned :-((("))
+            webhook_queue.put(('banned', create_webhook_data('banned', acc_prev, acc_curr, "Got banned :-(((")))
     elif got_true is False:
         new_account_event(acc_curr, "Ban lifted :-)))")
         if webhook_queue:
-            webhook_queue.put('banned', create_webhook_data('banned', acc_prev, acc_curr, "Ban lifted :-)))"))
+            webhook_queue.put(('banned', create_webhook_data('banned', acc_prev, acc_curr, "Ban lifted :-)))")))
 
     got_true = cmp_bool(acc_prev.ban_flag, acc_curr.ban_flag)
     if got_true:
         new_account_event(acc_curr, "Got ban flag :-X")
         if webhook_queue:
-            webhook_queue.put('banflag', create_webhook_data('banflag', acc_prev, acc_curr, "Got ban flag :-X"))
+            webhook_queue.put(('banflag', create_webhook_data('banflag', acc_prev, acc_curr, "Got ban flag :-X")))
     elif got_true is False:
         new_account_event(acc_curr, "Ban flag lifted :-O")
         if webhook_queue:
-            webhook_queue.put('banflag', create_webhook_data('banflag', acc_prev, acc_curr, "Ban flag lifted :-O"))
+            webhook_queue.put(('banflag', create_webhook_data('banflag', acc_prev, acc_curr, "Ban flag lifted :-O")))
 
     got_true = cmp_bool(acc_prev.captcha, acc_curr.captcha)
     if got_true:
         new_account_event(acc_curr, "Got CAPTCHA'd :-|")
         if webhook_queue:
-            webhook_queue.put('captcha', create_webhook_data('captcha', acc_prev, acc_curr, "Got CAPTCHA'd :-|"))
+            webhook_queue.put(('captcha', create_webhook_data('captcha', acc_prev, acc_curr, "Got CAPTCHA'd :-|")))
     elif got_true is False:
         new_account_event(acc_curr, "CAPTCHA solved :-)")
         if webhook_queue:
-            webhook_queue.put('captcha', create_webhook_data('captcha', acc_prev, acc_curr, "CAPTCHA solved :-)"))
+            webhook_queue.put(('captcha', create_webhook_data('captcha', acc_prev, acc_curr, "CAPTCHA solved :-)")))
 
     if acc_prev.system_id is not None and acc_curr.system_id is None:
         new_account_event(acc_curr, "Got released from [{}]: {}".format(acc_prev.system_id,
                                                                         metadata.get('_release_reason',
                                                                                      'unknown reason')))
         if webhook_queue:
-            webhook_queue.put('release', create_webhook_data('release', acc_prev, acc_curr,
-                                                            metadata.get('_release_reason', 'unknown reason')))
+            webhook_queue.put(('release', create_webhook_data('release', acc_prev, acc_curr,
+                                                            metadata.get('_release_reason', 'unknown reason'))))
 
 
         # if acc_prev.rareless_scans == 0 and acc_curr.rareless_scans > 0:
