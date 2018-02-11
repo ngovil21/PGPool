@@ -34,7 +34,7 @@ def send_to_webhooks(session, message_frame):
         try:
             # Disable keep-alive and set streaming to True, so we can skip
             # the response content.
-            session.post(hooks.get('webhook'), json=hooks.get('message_frame'),
+            session.post(hooks.get('webhook'), json=hooks.get('message'),
                          timeout=(None, req_timeout),
                          background_callback=__wh_completed,
                          headers={'Connection': 'close'},
@@ -84,7 +84,7 @@ def wh_updater(queue):
             else:
                 for f in filters:           #Check filters that match
                     if f.check(message):
-                        frame_message = {'webhook': f.get_webhook_url, 'message': f.format_webhook(message)}
+                        frame_message = {'webhook': f.get_webhook_url(), 'message': f.format_webhook(message)}
                         frame_messages.append(frame_message)
                 queue.task_done()
             # Store the time when we added the first message instead of the
