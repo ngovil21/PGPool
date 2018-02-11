@@ -135,7 +135,7 @@ wh_updates_queue = None
 if not cfg_get('wh_filter'):
     log.info('Webhook disabled.')
 else:
-    log.info('Webhook enabled for events; loading filters from ',
+    log.info('Webhook enabled for events; loading filters from %s',
              cfg_get('wh_filter'))
     if not load_filters(cfg_get('wh_filter')):
         log.warning("Unable to load webhook filters from {}. Exiting...".format(cfg_get('wh_filter')))
