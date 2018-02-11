@@ -384,6 +384,8 @@ def update_account(data, db):
                     setattr(acc, key, value)
                 else:
                     metadata[key] = value
+            if acc.system_id and not acc.assigned_at:
+                acc.assigned_at = datetime.now()        #make sure accounts with a system_id have an assigned time
             acc.last_modified = datetime.now()
             eval_acc_state_changes(acc_previous, acc, metadata)
             acc.save()
