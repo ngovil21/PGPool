@@ -144,7 +144,7 @@ else:
     # Thread to process webhook updates.
     for i in range(cfg_get('wh_threads')):
         log.debug('Starting wh-updater worker thread %d', i)
-        t = Thread(target=wh_updater, name='wh-updater-{}'.format(i), args=(wh_updates_queue))
+        t = Thread(target=wh_updater, name='wh-updater-{}'.format(i), args=(wh_updates_queue,))
         t.daemon = True
         t.start()
 
