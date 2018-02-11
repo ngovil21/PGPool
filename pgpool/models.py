@@ -384,7 +384,7 @@ def update_account(data, db):
                     setattr(acc, key, value)
                 else:
                     metadata[key] = value
-            if acc.system_id and not acc.assigned_at:
+            if acc.system_id and acc.assigned_at is None:
                 acc.assigned_at = datetime.now()        #make sure accounts with a system_id have an assigned time
             acc.last_modified = datetime.now()
             eval_acc_state_changes(acc_previous, acc, metadata)
@@ -446,6 +446,7 @@ def create_tables(db):
     db.close()
 
 def set_webhook_queue(wh_queue):
+    global webhook_queue
     webhook_queue = wh_queue
 
 def create_webhook_data(wh_type, prev_sysid, acc_cur, message=""):

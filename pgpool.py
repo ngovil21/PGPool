@@ -139,7 +139,7 @@ else:
              cfg_get('wh_filter'))
     if not load_filters(cfg_get('wh_filter')):
         log.warning("Unable to load webhook filters from {}. Exiting...".format(cfg_get('wh_filter')))
-        exit(-1)
+        raise SystemExit
     wh_updates_queue = Queue()
     set_webhook_queue(wh_updates_queue)
     # Thread to process webhook updates.
