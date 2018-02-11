@@ -189,8 +189,8 @@ def load_filters(filter_file):
             return False
         for filt_key in filt_file:
             settings = filt_file[filt_key]
-            if 'webhook' in settings and 'data' in filt_file[filt_key]:
-                filt = Filter(filt_file[filt_key])
+            if 'webhook' in settings and 'filter' in settings:
+                filt = Filter(settings)
                 check, msg = filt.validate()
                 if check:
                     filters.append(filt)
@@ -199,7 +199,7 @@ def load_filters(filter_file):
                     log.error(msg)
                     return False
             else:
-                log.error("Webhook filters must contain webhook_url and filter!")
+                log.error("Webhook filters must contain webhook and filter!")
     log.debug("Successfully loaded %d filters.", len(filt_file))
     return True
 
@@ -232,11 +232,9 @@ class Filter:
         if not isinstance(self.webhook, dict):
             return False, "Webhook must be a dict. Please refer to the example."
         if not self.webhook.get('url') or not self.webhook.get('data'):
-            return False, "Filter must have a url and format set!"
+            return False, "Filter must have a url and data set!"
         if not isinstance(self.filter, dict):
             return False, "Filter must be a dict. Please refer to the example."
-        if not self.get_webhook_url():
-            return False
         return True, ""
 
     def get_webhook_url(self):
