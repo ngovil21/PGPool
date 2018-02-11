@@ -460,7 +460,7 @@ def create_webhook_data(wh_type, prev_sysid, acc_cur, message=""):
         'type': wh_type,
         'system_id': acc_cur.system_id if acc_cur.system_id else prev_sysid,
         'assigned_at': acc_cur.assigned_at,
-        'running_time': running_time,
+        'running_time': "{0:.2f}".format(running_time or 0),
         'username': acc_cur.username,
         'auth_service': acc_cur.auth_service,
         'latitude': acc_cur.latitude,
