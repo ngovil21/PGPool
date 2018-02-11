@@ -244,7 +244,7 @@ class Filter:
         message = self.webhook.get('format', "")
         for key in message:
             for repl in data:
-                message = message[key].replace('<{}>'.format(repl), str(data[repl]))
+                message[key] = message[key].replace('<{}>'.format(repl), str(data[repl]))
         return message
 
 
