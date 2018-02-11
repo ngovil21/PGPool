@@ -181,6 +181,7 @@ def load_filters(filter_file):
 
     with open(filter_file, 'r') as f:
         filt_file = json.loads(f.read(), 'utf-8')
+        f.close()
         if type(filt_file) is not dict:
             log.error("Filters must be a proper JSON file!")
             return False
@@ -197,6 +198,7 @@ def load_filters(filter_file):
                     return False
             else:
                 log.error("Webhook filters must contain webhook_url and filter!")
+    log.debug("Successfully loaded %d filters.", len(filt_file))
     return True
 
 
