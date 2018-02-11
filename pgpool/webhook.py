@@ -186,7 +186,7 @@ def load_filters(filter_file):
             return False
         for filt_key in filt_file:
             settings = filt_file[filt_key]
-            if 'webhook_url' in settings and 'filter' in filt_file[filt_key]:
+            if 'webhook' in settings and 'filter' in filt_file[filt_key]:
                 filt = Filter(filt_file['filt_key'])
                 check, msg = filt.validate()
                 if check:
@@ -231,6 +231,8 @@ class Filter:
             return False, "Filter must have a url and format set!"
         if not isinstance(self.filter, dict):
             return False, "Filter must be a dict. Please refer to the example."
+        if not self.get_webhook_url():
+            return False
         return True, ""
 
     def get_webhook_url(self):
