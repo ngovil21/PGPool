@@ -20,7 +20,9 @@ flaskDb = FlaskDB()
 
 request_lock = Lock()
 
-db_schema_version = 2
+db_schema_version = 3
+
+webhook_queue = None
 
 class MyRetryDB(RetryOperationalError, PooledMySQLDatabase):
     pass
@@ -48,6 +50,7 @@ class Account(flaskDb.Model):
     email = Utf8mb4CharField(null=True)
     last_modified = DateTimeField(index=True, default=datetime.now)
     system_id = Utf8mb4CharField(max_length=64, index=True, null=True)  # system which uses the account
+    assigned_at = DateTimeField(index=True, null=True)
     latitude = DoubleField(null=True)
     longitude = DoubleField(null=True)
     # from player_stats
@@ -125,10 +128,15 @@ class Account(flaskDb.Model):
                     old_system_id = account.system_id
                     account.system_id = system_id
                     account.last_modified = datetime.now()
-                    account.save()
 
                     if old_system_id != system_id:
+                        account.assigned_at = datetime.now()
                         new_account_event(account, "Got assigned to [{}]".format(system_id))
+                        if webhook_queue:
+                            webhook_queue.put(('assign', create_webhook_data('assigned', None, account,
+                                                                               "Got assigned to [{}]".format(system_id))))
+
+                    account.save()
 
                     count -= 1
 
@@ -223,6 +231,12 @@ def migrate_database(db, old_ver):
             migrator.rename_column('event', 'type', 'entity_type')
         )
 
+    if old_ver < 3:
+        migrate(
+            migrator.add_column('account', 'assigned_at',
+                                DateTimeField(index=True, null=True))
+        )
+
     Version.update(val=db_schema_version).where(
         Version.key == 'schema_version').execute()
     log.info("Done migrating database.")
@@ -250,7 +264,7 @@ def migrate_varchar_columns(db, *fields):
     db.execute_sql("ALTER TABLE {} {};".format(table, ', '.join(stmts)))
 
 
-def db_updater(q, db, wh_queue=None):
+def db_updater(q, db):
     # The forever loop.
     while True:
         try:
@@ -266,7 +280,7 @@ def db_updater(q, db, wh_queue=None):
             # Loop the queue.
             while True:
                 data = q.get()
-                update_account(data, db, wh_queue)
+                update_account(data, db)
                 q.task_done()
 
                 # Helping out the GC.
@@ -284,72 +298,72 @@ def new_account_event(acc, description):
     log.info("Event for account {}: {}".format(acc.username, description))
 
 
-def eval_acc_state_changes(acc_prev, acc_curr, metadata, webhook_queue=None):
+def eval_acc_state_changes(acc_prev, acc_curr, metadata):
 
     level_prev = acc_prev.level
     level_curr = acc_curr.level
     if level_prev is not None and level_curr is not None and level_prev < level_curr:
         new_account_event(acc_curr, "Level {} reached".format(level_curr))
         if webhook_queue:
-            webhook_queue.put(('levelup', create_webhook_data('levelup', acc_prev, acc_curr,
+            webhook_queue.put(('levelup', create_webhook_data('levelup', acc_prev.system_id, acc_curr,
                                                              "Level {} reached".format(level_curr))))
 
     got_true = cmp_bool(acc_prev.warn, acc_curr.warn)
     if got_true:
         new_account_event(acc_curr, "Got warn flag :-/")
         if webhook_queue:
-            webhook_queue.put(('warn', create_webhook_data('warn', acc_prev, acc_curr, "Got warn flag :-/")))
+            webhook_queue.put(('warn', create_webhook_data('warn', acc_prev.system_id, acc_curr, "Got warn flag :-/")))
     elif got_true is False:
         new_account_event(acc_curr, "Warn flag lifted :-)")
         if webhook_queue:
-            webhook_queue.put(('warn', create_webhook_data('warn', acc_prev, acc_curr, "Warn flag lifted :-)")))
+            webhook_queue.put(('warn', create_webhook_data('warn', acc_prev.system_id, acc_curr, "Warn flag lifted :-)")))
 
     got_true = cmp_bool(acc_prev.shadowbanned, acc_curr.shadowbanned)
     if got_true:
         new_account_event(acc_curr, "Got shadowban flag :-(")
         if webhook_queue:
-            webhook_queue.put(('shadowban', create_webhook_data('shadowban', acc_prev, acc_curr, "Got shadowban flag :-(")))
+            webhook_queue.put(('shadowban', create_webhook_data('shadowban', acc_prev.system_id, acc_curr, "Got shadowban flag :-(")))
     elif got_true is False:
         new_account_event(acc_curr, "Shadowban flag lifted :-)")
         if webhook_queue:
-            webhook_queue.put(('shadowban', create_webhook_data('shadowban', acc_prev, acc_curr, "Shadowban flag lifted :-)")))
+            webhook_queue.put(('shadowban', create_webhook_data('shadowban', acc_prev.system_id, acc_curr, "Shadowban flag lifted :-)")))
 
     got_true = cmp_bool(acc_prev.banned, acc_curr.banned)
     if got_true is not None:
         new_account_event(acc_curr, "Got banned :-(((")
         if webhook_queue:
-            webhook_queue.put(('banned', create_webhook_data('banned', acc_prev, acc_curr, "Got banned :-(((")))
+            webhook_queue.put(('banned', create_webhook_data('banned', acc_prev.system_id, acc_curr, "Got banned :-(((")))
     elif got_true is False:
         new_account_event(acc_curr, "Ban lifted :-)))")
         if webhook_queue:
-            webhook_queue.put(('banned', create_webhook_data('banned', acc_prev, acc_curr, "Ban lifted :-)))")))
+            webhook_queue.put(('banned', create_webhook_data('banned', acc_prev.system_id, acc_curr, "Ban lifted :-)))")))
 
     got_true = cmp_bool(acc_prev.ban_flag, acc_curr.ban_flag)
     if got_true:
         new_account_event(acc_curr, "Got ban flag :-X")
         if webhook_queue:
-            webhook_queue.put(('banflag', create_webhook_data('banflag', acc_prev, acc_curr, "Got ban flag :-X")))
+            webhook_queue.put(('banflag', create_webhook_data('banflag', acc_prev.system_id, acc_curr, "Got ban flag :-X")))
     elif got_true is False:
         new_account_event(acc_curr, "Ban flag lifted :-O")
         if webhook_queue:
-            webhook_queue.put(('banflag', create_webhook_data('banflag', acc_prev, acc_curr, "Ban flag lifted :-O")))
+            webhook_queue.put(('banflag', create_webhook_data('banflag', acc_prev.system_id, acc_curr, "Ban flag lifted :-O")))
 
     got_true = cmp_bool(acc_prev.captcha, acc_curr.captcha)
     if got_true:
         new_account_event(acc_curr, "Got CAPTCHA'd :-|")
         if webhook_queue:
-            webhook_queue.put(('captcha', create_webhook_data('captcha', acc_prev, acc_curr, "Got CAPTCHA'd :-|")))
+            webhook_queue.put(('captcha', create_webhook_data('captcha', acc_prev.system_id, acc_curr, "Got CAPTCHA'd :-|")))
     elif got_true is False:
         new_account_event(acc_curr, "CAPTCHA solved :-)")
         if webhook_queue:
-            webhook_queue.put(('captcha', create_webhook_data('captcha', acc_prev, acc_curr, "CAPTCHA solved :-)")))
+            webhook_queue.put(('captcha', create_webhook_data('captcha', acc_prev.system_id, acc_curr, "CAPTCHA solved :-)")))
 
     if acc_prev.system_id is not None and acc_curr.system_id is None:
         new_account_event(acc_curr, "Got released from [{}]: {}".format(acc_prev.system_id,
                                                                         metadata.get('_release_reason',
                                                                                      'unknown reason')))
         if webhook_queue:
-            webhook_queue.put(('release', create_webhook_data('release', acc_prev, acc_curr,
+            webhook_queue.put(('release', create_webhook_data('release', acc_prev.system_id, acc_curr,
                                                             metadata.get('_release_reason', 'unknown reason'))))
 
 
@@ -359,7 +373,7 @@ def eval_acc_state_changes(acc_prev, acc_curr, metadata, webhook_queue=None):
         #     new_account_event(acc_curr, "Saw rares again :-)")
 
 
-def update_account(data, db, wh_queue=None):
+def update_account(data, db):
     with db.atomic():
         try:
             acc, created = Account.get_or_create(username=data['username'])
@@ -371,7 +385,7 @@ def update_account(data, db, wh_queue=None):
                 else:
                     metadata[key] = value
             acc.last_modified = datetime.now()
-            eval_acc_state_changes(acc_previous, acc, metadata, wh_queue)
+            eval_acc_state_changes(acc_previous, acc, metadata)
             acc.save()
             if cfg_get('log_updates'):
                 log.info("Processed update for {}".format(acc.username))
@@ -404,7 +418,11 @@ def auto_release():
                                                                                                          release_timeout))
             for acc in accounts:
                 new_account_event(acc, "Auto-releasing from [{}]".format(acc.system_id))
+                if webhook_queue:
+                    webhook_queue.put(('release', create_webhook_data('release', acc.system_id, acc,
+                                                                        "Auto-releasing from [{}]".format(acc.system_id))))
                 acc.system_id = None
+                acc.assigned_at = None
                 acc.last_modified = datetime.now()
                 acc.save()
         except Exception as e:
@@ -425,12 +443,21 @@ def create_tables(db):
             log.debug('Skipping table %s, it already exists.', table.__name__)
     db.close()
 
+def set_webhook_queue(wh_queue):
+    webhook_queue = wh_queue
 
-def create_webhook_data(wh_type, acc_prev, acc_cur, message=""):
+def create_webhook_data(wh_type, prev_sysid, acc_cur, message=""):
     low, high, unknown, total = query_accounts("banned = 0 and shadowbanned = 0 and captcha = 0")
+    if acc_cur.assigned_at:
+        running_time = (datetime.now() - acc_cur.assigned_at).total_seconds() / 3600.      #Calculate running_time in hours
+    else:
+        running_time = None
+
     webhook_data = {
         'type': wh_type,
-        'system_id': acc_cur.system_id if acc_cur.system_id else acc_prev.system_id,
+        'system_id': acc_cur.system_id if acc_cur.system_id else prev_sysid,
+        'assigned_at': acc_cur.assigned_at,
+        'running_time': running_time,
         'username': acc_cur.username,
         'auth_service': acc_cur.auth_service,
         'latitude': acc_cur.latitude,

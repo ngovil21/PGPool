@@ -8,7 +8,7 @@ from werkzeug.exceptions import abort
 
 from pgpool.config import cfg_get
 from pgpool.console import print_status, stats_conditions
-from pgpool.models import init_database, db_updater, Account, auto_release, flaskDb
+from pgpool.models import init_database, db_updater, Account, auto_release, flaskDb, set_webhook_queue
 
 # ---------------------------------------------------------------------------
 from pgpool.utils import parse_bool, rss_mem_size
@@ -141,6 +141,7 @@ else:
         log.warning("Unable to load webhook filters from {}. Exiting...".format(cfg_get('wh_filter')))
         exit(-1)
     wh_updates_queue = Queue()
+    set_webhook_queue(wh_updates_queue)
     # Thread to process webhook updates.
     for i in range(cfg_get('wh_threads')):
         log.debug('Starting wh-updater worker thread %d', i)
@@ -154,7 +155,7 @@ db = init_database(app)
 db_updates_queue = Queue()
 
 t = Thread(target=db_updater, name='db-updater',
-           args=(db_updates_queue, db, wh_updates_queue))
+           args=(db_updates_queue, db))
 t.daemon = True
 t.start()
 
