@@ -28,6 +28,7 @@ wh_frame_interval = 500
 
 filters = []
 
+
 def send_to_webhooks(session, message_frame):
 
     req_timeout = wh_timeout
@@ -147,6 +148,7 @@ def __wh_completed(sess, resp):
     # Instantly close the response to release the connection back to the pool.
     resp.close()
 
+
 # Get a future_requests FuturesSession that supports asynchronous workers
 # and retrying requests on failure.
 # Setting up a persistent session that is re-used by multiple requests can
@@ -206,11 +208,13 @@ def load_filters(filter_file):
 
 class Filter:
 
-    def __init__(self, filt_settings):
+    def __init__(self, filt_name, filt_settings):
+        self.name = filt_name
         if 'webhook' in filt_settings:
             self.webhook = filt_settings.pop('webhook')
         if 'filter' in filt_settings:
             self.filter = filt_settings.pop('filter')
+        self.enabled = filt_settings.get('enabled', True)
 
     def check(self, data):
         if 'types' in self.filter:
@@ -232,9 +236,17 @@ class Filter:
         if not isinstance(self.webhook, dict):
             return False, "Webhook must be a dict. Please refer to the example."
         if not self.webhook.get('url') or not self.webhook.get('data'):
-            return False, "Filter must have a url and data set!"
+            return False, "Webhook must have a url and data set!"
         if not isinstance(self.filter, dict):
             return False, "Filter must be a dict. Please refer to the example."
+        if 'types' in self.filter and not isinstance(self.filter['types'], list):
+            return False, "Filter types must be a list!"
+        if 'system_id' in self.filter and not isinstance(self.filter['system_id'], list):
+            return False, "Filter system_id must be a list!"
+        if 'min_lvl' in self.filter and not str(self.filter['min_lvl']).isdigit():
+            return False, "Filter min_lvl must be an integer!"
+        if 'max_lvl' in self.filter and not str(self.filter['max_lvl']).isdigit():
+            return False, "Filter max_lvl must be an integer!"
         return True, ""
 
     def get_webhook_url(self):
@@ -246,5 +258,4 @@ class Filter:
             for repl in data_in:
                 wh_data[key] = wh_data[key].replace('<{}>'.format(repl), str(data_in[repl]))
         return wh_data
-
 

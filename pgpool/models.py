@@ -332,11 +332,11 @@ def eval_acc_state_changes(acc_prev, acc_curr, metadata):
     if got_true is not None:
         new_account_event(acc_curr, "Got banned :-(((")
         if webhook_queue:
-            webhook_queue.put(('banned', create_webhook_data('banned', acc_prev.system_id, acc_curr, "Got banned :-(((")))
+            webhook_queue.put(('ban', create_webhook_data('ban', acc_prev.system_id, acc_curr, "Got banned :-(((")))
     elif got_true is False:
         new_account_event(acc_curr, "Ban lifted :-)))")
         if webhook_queue:
-            webhook_queue.put(('banned', create_webhook_data('banned', acc_prev.system_id, acc_curr, "Ban lifted :-)))")))
+            webhook_queue.put(('ban', create_webhook_data('ban', acc_prev.system_id, acc_curr, "Ban lifted :-)))")))
 
     got_true = cmp_bool(acc_prev.ban_flag, acc_curr.ban_flag)
     if got_true:
