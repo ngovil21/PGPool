@@ -212,16 +212,16 @@ class Filter:
 
     def check(self, data):
         if 'types' in self.filter:
-            if data.get('type') not in filter['types']:
+            if data.get('type') not in self.filter['types']:
                 return False
         if 'min_lvl' in self.filter:
-            if data.get('level', 0) < filter['min_lvl']:
+            if data.get('level', 0) < self.filter['min_lvl']:
                 return False
         if 'max_lvl' in self.filter:
-            if data.get('level', 1000) > filter['max_lvl']:
+            if data.get('level', 1000) > self.filter['max_lvl']:
                 return False
         if 'system_id' in self.filter:
-            if not data.get('system_id') or data.get('system_id') not in filter['system_id']:
+            if not data.get('system_id') or data.get('system_id') not in self.filter['system_id']:
                 return False
 
         return True
