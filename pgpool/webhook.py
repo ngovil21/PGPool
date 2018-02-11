@@ -192,7 +192,7 @@ def load_filters(filter_file):
         for filt_key in filt_file:
             settings = filt_file[filt_key]
             if 'webhook' in settings and 'filter' in settings:
-                filt = Filter(settings)
+                filt = Filter(filt_key, settings)
                 check, msg = filt.validate()
                 if check:
                     filters.append(filt)
