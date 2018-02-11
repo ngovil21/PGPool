@@ -180,7 +180,7 @@ def get_async_requests_session(num_retries, backoff_factor, pool_size,
 def load_filters(filter_file):
 
     with open(file=filter_file, mode='r') as f:
-        filt_file = json.load(f)
+        filt_file = json.loads(f.read(), 'utf-8')
         if type(filt_file) is not dict:
             log.error("Filters must be a proper JSON file!")
             return False

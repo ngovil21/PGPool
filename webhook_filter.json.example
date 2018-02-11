@@ -7,5 +7,10 @@
                 "content": "<username> (Level <level>): <message>"
             }
         }
+        "filter": {
+            "types": ['banned', 'shadowbanned'],
+            "min_lvl": 30
+            "max_lvl": 40
+        }
     }
 }
