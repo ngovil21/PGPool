@@ -1,5 +1,7 @@
 import json
 import logging
+
+import copy
 import requests
 import threading
 
@@ -187,7 +189,7 @@ def load_filters(filter_file):
             return False
         for filt_key in filt_file:
             settings = filt_file[filt_key]
-            if 'webhook' in settings and 'filter' in filt_file[filt_key]:
+            if 'webhook' in settings and 'data' in filt_file[filt_key]:
                 filt = Filter(filt_file[filt_key])
                 check, msg = filt.validate()
                 if check:
@@ -229,7 +231,7 @@ class Filter:
     def validate(self):
         if not isinstance(self.webhook, dict):
             return False, "Webhook must be a dict. Please refer to the example."
-        if not self.webhook.get('url') or not self.webhook.get('format'):
+        if not self.webhook.get('url') or not self.webhook.get('data'):
             return False, "Filter must have a url and format set!"
         if not isinstance(self.filter, dict):
             return False, "Filter must be a dict. Please refer to the example."
@@ -240,11 +242,11 @@ class Filter:
     def get_webhook_url(self):
         return self.webhook.get('url')
 
-    def format_webhook(self, data):
-        message = self.webhook.get('format', "")
-        for key in message:
-            for repl in data:
-                message[key] = message[key].replace('<{}>'.format(repl), str(data[repl]))
-        return message
+    def format_webhook(self, data_in):
+        wh_data = copy.deepcopy(self.webhook.get('data', {}))
+        for key in wh_data:
+            for repl in data_in:
+                wh_data[key] = wh_data[key].replace('<{}>'.format(repl), str(data_in[repl]))
+        return wh_data
 
 
