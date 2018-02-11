@@ -19,8 +19,8 @@ cfg = {
     'log_updates': True,
     'account_release_timeout': 120,     # Accounts are being released automatically after this many minutes from last update
     'max_queue_size': 50,                # Block update requests if queue already has this many items
-    'webhooks': [],
-    'wh_types': []
+    'wh_filter': '',
+    'wh_threads': 3
 }
 
 

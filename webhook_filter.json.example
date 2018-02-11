@@ -1,0 +1,11 @@
+{
+    "DISCORD_WEBHOOK_EXAMPLE": {
+        "webhook": {
+            "url": "",
+            "format": {
+                "username": "PGPool Bot",
+                "content": "<username> (Level <level>): <message>"
+            }
+        }
+    }
+}

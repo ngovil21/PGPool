@@ -1,3 +1,4 @@
+import json
 import logging
 import requests
 import threading
@@ -23,27 +24,23 @@ wh_concurrency = 25
 wh_lfu_size = 1000
 wh_frame_interval = 500
 
+filters = []
 
 def send_to_webhooks(session, message_frame):
-    webhooks = cfg_get('webhooks')
-    if not webhooks:
-        # What are you even doing here...
-        log.warning('Called send_to_webhook() without webhooks.')
-        return
 
     req_timeout = wh_timeout
 
-    for w in webhooks:
+    for hooks in message_frame:
         try:
             # Disable keep-alive and set streaming to True, so we can skip
             # the response content.
-            session.post(w, json=message_frame,
+            session.post(hooks.get('webhook'), json=hooks.get('message_frame'),
                          timeout=(None, req_timeout),
                          background_callback=__wh_completed,
                          headers={'Connection': 'close'},
                          stream=True)
         except requests.exceptions.ReadTimeout:
-            log.exception('Response timeout on webhook endpoint %s.', w)
+            log.exception('Response timeout on webhook endpoint %s.', hooks.get('webhook'))
         except requests.exceptions.RequestException as e:
             log.exception(e)
 
@@ -85,8 +82,10 @@ def wh_updater(queue):
             except Empty:
                 pass
             else:
-                frame_message = {'type': whtype, 'message': message}
-                frame_messages.append(frame_message)
+                for f in filters:           #Check filters that match
+                    if f.check(message):
+                        frame_message = {'webhook': f.get_webhook_url, 'message': f.format_webhook(message)}
+                        frame_messages.append(frame_message)
                 queue.task_done()
             # Store the time when we added the first message instead of the
             # time when we last cleared the messages, so we more accurately
@@ -103,9 +102,8 @@ def wh_updater(queue):
 
             if num_messages > 0 and (time_passed_sec >
                                      frame_interval_sec):
-                log.debug('Sending %d items to %d webhook(s).',
-                          num_messages,
-                          len(cfg_get('webhooks')))
+                log.debug('Sending %d items webhooks.',
+                          num_messages)
                 send_to_webhooks(session, frame_messages)
 
                 frame_messages = []
@@ -125,8 +123,7 @@ def wh_updater(queue):
                     if timediff_sec > wh_threshold_lifetime:
                         log.warning('Webhook queue has been > %d (@%d);'
                                     + ' for over %d seconds,'
-                                    + ' try increasing --wh-concurrency'
-                                    + ' or --wh-threads.',
+                                    + ' try increasing --wh-threads.',
                                     wh_warning_threshold,
                                     queue.qsize(),
                                     wh_threshold_lifetime)
@@ -135,12 +132,18 @@ def wh_updater(queue):
             log.exception('Exception in wh_updater: %s.', e)
 
 
+def load_webhook_template(file):
+    with open(file, 'r') as template:
+        temp = json.loads(template.read(), 'utf-8')
+        template.close()
+        return temp
+
+
 # Helpers
 # Background handler for completed webhook requests.
 def __wh_completed(sess, resp):
     # Instantly close the response to release the connection back to the pool.
     resp.close()
-
 
 # Get a future_requests FuturesSession that supports asynchronous workers
 # and retrying requests on failure.
@@ -172,3 +175,71 @@ def get_async_requests_session(num_retries, backoff_factor, pool_size,
                                           pool_maxsize=pool_size))
 
     return session
+
+
+def load_filters(filter_file):
+
+    with open(file=filter_file, mode='r') as f:
+        filt_file = json.load(f)
+        if type(filt_file) is not dict:
+            log.error("Filters must be a proper JSON file!")
+            return False
+        for filt_key in filt_file:
+            settings = filt_file[filt_key]
+            if 'webhook_url' in settings and 'filter' in filt_file[filt_key]:
+                filt = Filter(filt_file['filt_key'])
+                check, msg = filt.validate()
+                if check:
+                    filters.append(filt)
+                    log.debug('Added filter %s', filt_key)
+                else:
+                    log.error(msg)
+                    return False
+            else:
+                log.error("Webhook filters must contain webhook_url and filter!")
+    return True
+
+
+class Filter:
+
+    def __init__(self, filt_settings):
+        if 'webhook' in filt_settings:
+            self.webhook = filt_settings.pop('webhook')
+        if 'filter' in filt_settings:
+            self.filter = filt_settings.pop('filter')
+
+    def check(self, data):
+        if 'types' in self.filter:
+            if data.get('type') not in filter['types']:
+                return False
+        if 'min_lvl' in self.filter:
+            if data.get('level', 0) < filter['min_lvl']:
+                return False
+        if 'max_lvl' in self.filter:
+            if data.get('level', 1000) > filter['max_lvl']:
+                return False
+        if 'system_id' in self.filter:
+            if not data.get('system_id') or data.get('system_id') not in filter['system_id']:
+                return False
+
+        return True
+
+    def validate(self):
+        if not isinstance(self.webhook, dict):
+            return False, "Webhook must be a dict. Please refer to the example."
+        if not self.webhook.get('url') or not self.webhook.get('format'):
+            return False, "Filter must have a url and format set!"
+        if not isinstance(self.filter, dict):
+            return False, "Filter must be a dict. Please refer to the example."
+        return True, ""
+
+    def get_webhook_url(self):
+        return self.webhook.get('url')
+
+    def format_webhook(self, data):
+        message = self.webhook.get('format', "")
+        for key in data:
+            message = message.replace('<{}>'.format(key), str(data['d']))
+        return message
+
+
