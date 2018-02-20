@@ -27,6 +27,12 @@ cfg = {
 def cfg_get(key, default=None):
     return cfg.get(key, default)
 
+
+def load_config(c):
+    with open(c, 'r') as f:
+        user_cfg = json.loads(f.read())
+        cfg.update(user_cfg)
+
 # ===========================================================================
 
 parser = configargparse.ArgParser()
@@ -49,6 +55,5 @@ if args.condition != 'unknown' and not args.level:
     log.error("You must also specify a trainer level with --level if you force an account condition with --condition.")
     sys.exit(1)
 
-with open(args.config, 'r') as f:
-    user_cfg = json.loads(f.read())
-    cfg.update(user_cfg)
+load_config(args.config)
+

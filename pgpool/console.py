@@ -12,8 +12,10 @@ from threading import Thread
 
 from peewee import fn
 
+from pgpool.config import load_config, args, cfg_get
 from pgpool.models import Account, flaskDb
 from pgpool.utils import rss_mem_size
+from pgpool.webhook import load_filters
 
 log = logging.getLogger(__name__)
 
@@ -44,6 +46,15 @@ def input_processor(state):
             # Toggle between scouts and log view
             state['display'] = 'stats' if state['display'] == 'logs' else 'logs'
             log.info("Showing {}".format(state['display']))
+
+        if command == 'r':
+            log.info("Reloading config")
+            try:
+                load_config(args.config)
+                if cfg_get('wh_filter'):
+                    load_filters(cfg_get('wh_filter'))
+            except Exception as e:
+                log.warning("Error reloading configs: {}".format(e))
 
         # Disable logging if in fullscreen more
         if state['display'] == 'logs':

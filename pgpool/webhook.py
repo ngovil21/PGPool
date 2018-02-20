@@ -207,6 +207,11 @@ def load_filters(filter_file):
     return True
 
 
+def reset_filters():
+    global filters
+    filters = []
+
+
 class Filter:
 
     def __init__(self, filt_name, filt_settings):
