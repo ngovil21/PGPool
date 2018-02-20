@@ -182,7 +182,8 @@ def get_async_requests_session(num_retries, backoff_factor, pool_size,
 
 
 def load_filters(filter_file):
-
+    global filters
+    temp_filters = copy.deepcopy(filters)
     with open(filter_file, 'r') as f:
         filt_file = json.loads(f.read(), 'utf-8')
         f.close()
@@ -200,10 +201,12 @@ def load_filters(filter_file):
                         log.debug('Added filter %s', filt_key)
                     else:
                         log.error(msg)
+                        filters = temp_filters
                         return False
             else:
                 log.error("Webhook filters must contain webhook and filter!")
     log.debug("Successfully loaded %d filters.", len(filt_file))
+    del temp_filters
     return True
 
 
